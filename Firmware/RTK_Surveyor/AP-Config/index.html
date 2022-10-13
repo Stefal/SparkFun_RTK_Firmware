@@ -974,7 +974,7 @@
 
                     <div id="surveyInConfig" class="collapse mb-2">
                         <div class="form-group row">
-                            <label for="observationSeconds" class="box-margin20 col-sm-12 col-form-label">Minimum
+                            <label for="observationSeconds" class="box-margin20 col-sm-4 col-form-label">Minimum
                                 observation time(s):</label>
                             <div class="col-sm-4 col-5 ms-3 mb-2">
                                 <input type="number" class="form-control" id="observationSeconds">
@@ -984,7 +984,7 @@
 
                         <div class="form-group row">
                             <label for="observationPositionAccuracy"
-                                class="box-margin20 col-sm-12 col-form-label">Required
+                                class="box-margin20 col-sm-4 col-form-label">Required
                                 Mean 3D Standard Deviation
                                 (m):</label>
                             <div class="col-sm-4 ms-3 col-5 mb-3">
@@ -993,10 +993,10 @@
                             </div>
                         </div>
                     </div>
-
+                    
                     <div id="fixedRadio">
                         <input type="radio" id="baseTypeFixed" name="baseType" value="1" class="form-radio">
-                        <label for="baseTypeFixed">Fixed<span class="small"> (Choose ECEF or
+                        <label for="baseTypeFixed">Enter Base Coordinates<span class="small"> (ECEF or
                                 Geodetic)</span></label>
                         <span class="tt" data-bs-placement="right"
                             title="If the location of the base is known it can be entered in either ECEF or Geodetic coordinates. In this mode the receiver will immediately begin outputting RTCM correction data. A fixed position is best obtained with PPP (please see our tutorial) or with post processing against a reference station. Default: SparkFun's location in Boulder, Colorado.">
@@ -1230,6 +1230,47 @@
                                 </div>
                             </div>
 
+                        </div>
+                    </div>
+
+                    <div id="useCurrentRadio">
+                        <input type="radio" id="baseTypeUseCurrent" name="baseType" value="2" class="form-radio">
+                        <label for="baseTypeUseCurrent">Use Current Coordinates</label>
+                        <span class="tt" data-bs-placement="right"
+                            title="Skip survey-in and use current coordinates in a fixed base. In this mode the receiver will immediately begin outputting RTCM correction data. Any error in the current coordinates will be proportionally transmitted to a rover.">
+                            <span class="icon-info-circle text-primary ms-2"></span>
+                        </span>
+                    </div>
+
+                    <div id="useCurrentConfig" class="collapse mb-2">
+                        <div class="form-group row">
+                            <label for="antennaHeightCurrentConfig" class="box-margin20 col-sm-4 col-form-label">Antenna
+                                Height(mm):
+                                <span class="tt" data-bs-placement="right"
+                                    title="Distance from the base of the antenna to the mark on the ground. This is usually the total length of the prism pole and any extensions. Amount is added to HAE before starting fixed base.">
+                                    <span class="icon-info-circle text-primary ms-2"></span>
+                                </span>
+                            </label>
+
+                            <div class="col-sm-4 col-5">
+                                <input type="number" class="form-control" id="antennaHeightCurrentConfig">
+                                <p id="antennaHeightCurrentConfigError" class="inlineError"></p>
+                            </div>
+                        </div>
+
+                        <div class="form-group row">
+                            <label for="antennaReferencePointCurrentConfig"
+                                class="box-margin20 col-sm-4 col-form-label">Antenna
+                                Reference Point(mm):
+                                <span class="tt" data-bs-placement="right"
+                                    title="ARP is the distance from the base of the antenna to the antenna phase center. This is usually printed on the side of the antenna and is calculated during antenna calibration. Amount is added to HAE before starting fixed base.">
+                                    <span class="icon-info-circle text-primary ms-2"></span>
+                                </span>
+                            </label>
+                            <div class="col-sm-4 col-5">
+                                <input type="number" class="form-control" id="antennaReferencePointCurrentConfig">
+                                <p id="antennaReferencePointCurrentConfigError" class="inlineError"></p>
+                            </div>
                         </div>
                     </div>
 

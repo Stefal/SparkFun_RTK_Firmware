@@ -408,10 +408,14 @@ function validateFields() {
             clearElement("fixedAltitude", 1560.089);
             clearElement("antennaHeight", 0);
             clearElement("antennaReferencePoint", 0);
+            clearElement("antennaHeightCurrentConfig", 0);
+            clearElement("antennaReferencePointCurrentConfig", 0);
         }
-        else {
+        else if (ge("baseTypeFixed").checked) {
             clearElement("observationSeconds", 60);
             clearElement("observationPositionAccuracy", 5.0);
+            clearElement("antennaHeightCurrentConfig", 0);
+            clearElement("antennaReferencePointCurrentConfig", 0);
 
             if (ge("fixedBaseCoordinateTypeECEF").checked) {
                 clearElement("fixedLat", 40.09029479);
@@ -434,6 +438,21 @@ function validateFields() {
                 checkElementValue("antennaHeight", -15000, 15000, "Must be -15000 to 15000", "collapseBaseConfig");
                 checkElementValue("antennaReferencePoint", -200.0, 200.0, "Must be -200.0 to 200.0", "collapseBaseConfig");
             }
+        }
+        else if (ge("baseTypeUseCurrent").checked) {
+            checkElementValue("antennaHeightCurrentConfig", -15000, 15000, "Must be -15000 to 15000", "collapseBaseConfig");
+            checkElementValue("antennaReferencePointCurrentConfig", -200.0, 200.0, "Must be -200.0 to 200.0", "collapseBaseConfig");
+
+            clearElement("observationSeconds", 60);
+            clearElement("observationPositionAccuracy", 5.0);
+            clearElement("fixedEcefX", -1280206.568);
+            clearElement("fixedEcefY", -4716804.403);
+            clearElement("fixedEcefZ", 4086665.484);
+            clearElement("fixedLat", 40.09029479);
+            clearElement("fixedLong", -105.18505761);
+            clearElement("fixedAltitude", 1560.089);
+            clearElement("antennaHeight", 0);
+            clearElement("antennaReferencePoint", 0);
         }
 
         if (ge("enableNtripServer").checked == true) {
@@ -790,17 +809,27 @@ document.addEventListener("DOMContentLoaded", (event) => {
         ge("measurementRateHz").value = 1.0 / ge("measurementRateSec").value;
     });
 
-    ge("baseTypeSurveyIn").addEventListener("change", function () {
-        if (ge("baseTypeSurveyIn").checked) {
-            show("surveyInConfig");
-            hide("fixedConfig");
-        }
-    });
-
     ge("baseTypeFixed").addEventListener("change", function () {
         if (ge("baseTypeFixed").checked) {
             show("fixedConfig");
+            hide("useCurrentConfig");
             hide("surveyInConfig");
+        }
+    });
+
+    ge("baseTypeUseCurrent").addEventListener("change", function () {
+        if (ge("baseTypeUseCurrent").checked) {
+            hide("fixedConfig");
+            show("useCurrentConfig");
+            hide("surveyInConfig");
+        }
+    });
+
+    ge("baseTypeSurveyIn").addEventListener("change", function () {
+        if (ge("baseTypeSurveyIn").checked) {
+            hide("fixedConfig");
+            hide("useCurrentConfig");
+            show("surveyInConfig");
         }
     });
 
