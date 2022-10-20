@@ -243,7 +243,25 @@ void F9PSerialReadTask(void *e)
             sdBytesToRecord = sizeof(rBuffer) - sdTail;
 
           //Write the data to the file
+#ifdef USE_SDFAT
           sdBytesToRecord = ubxFile->write(&rBuffer[sdTail], sdBytesToRecord);
+#else
+          //TODO
+          sdBytesToRecord = ubxFile.write(&rBuffer[sdTail], sdBytesToRecord);
+#endif
+
+          //Force file sync every 5000ms
+          if (millis() - lastUBXLogSyncTime > 5000)
+          {
+#ifdef USE_SDFAT
+            ubxFile->sync();
+#else
+            ubxFile.flush();
+#endif
+            lastUBXLogSyncTime = millis();
+          } //End sdCardSemaphore
+
+
           xSemaphoreGive(sdCardSemaphore);
 
           //Account for the sent data or dropped
@@ -278,6 +296,7 @@ void F9PSerialReadTask(void *e)
     taskYIELD();
   }
 }
+
 
 //Control BT status LED according to bluetoothGetState()
 void updateBTled()

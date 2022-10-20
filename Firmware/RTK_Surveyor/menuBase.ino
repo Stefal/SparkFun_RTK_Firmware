@@ -379,7 +379,7 @@ bool getFileLineLFS(const char* fileName, int lineToFind, char* lineData, int li
       //Sometimes a line has multiple terminators
       while (file.peek() == '\r' || file.peek() == '\n')
         file.read(); //Dump it to prevent next line read corruption
-      
+
       lineNumber++; //Advance
       x = 0; //Reset
     }
@@ -420,20 +420,29 @@ bool getFileLineSD(const char* fileName, int lineToFind, char* lineData, int lin
     {
       gotSemaphore = true;
 
+#ifdef USE_SDFAT
       SdFile file; //FAT32
       if (file.open(fileName, O_READ) == false)
       {
         log_d("File %s not found", fileName);
         break;
       }
+#else
+      //TODO
+      File file;
+#endif
 
       int lineNumber = 0;
 
       while (file.available())
       {
         //Get the next line from the file
-        //int n = getLine(&file, lineData, lineDataLength); //Use with SD library
+#ifdef USE_SDFAT
         int n = file.fgets(lineData, lineDataLength); //Use with SdFat library
+#else
+        //TODO
+        int n = getLine(&file, lineData, lineDataLength); //Use with SD library
+#endif
         if (n <= 0)
         {
           Serial.printf("Failed to read line %d from settings file\r\n", lineNumber);
@@ -448,7 +457,7 @@ bool getFileLineSD(const char* fileName, int lineToFind, char* lineData, int lin
           }
         }
 
-        if(strlen(lineData) > 0) //Ignore single \n or \r
+        if (strlen(lineData) > 0) //Ignore single \n or \r
           lineNumber++;
       }
 
@@ -500,12 +509,16 @@ bool removeFileSD(const char* fileName)
     if (xSemaphoreTake(sdCardSemaphore, fatSemaphore_longWait_ms) == pdPASS)
     {
       gotSemaphore = true;
+#ifdef USD_SDFAT
       if (sd->exists(fileName))
       {
         log_d("Removing from SD: %s", fileName);
         sd->remove(fileName);
         removed = true;
       }
+#else
+      //TODO
+#endif
 
       break;
     } //End Semaphore check
@@ -553,7 +566,6 @@ bool removeFile(const char* fileName)
 void recordLineToSD(const char* fileName, const char* lineData)
 {
   bool gotSemaphore = false;
-  bool lineFound = false;
   bool wasSdCardOnline;
 
   //Try to gain access the SD card
@@ -568,12 +580,17 @@ void recordLineToSD(const char* fileName, const char* lineData)
     {
       gotSemaphore = true;
 
+#ifdef USE_SDFAT
       SdFile file; //FAT32
       if (file.open(fileName, O_CREAT | O_APPEND | O_WRITE) == false)
       {
         log_d("File %s not found", fileName);
         break;
       }
+#else
+      //TODO
+      File file;
+#endif
 
       file.println(lineData);
       file.close();
@@ -611,10 +628,10 @@ void recordLineToLFS(const char* fileName, const char* lineData)
 void trim(char *str)
 {
   int x = 0;
-  for( ; str[x] != '\0' ; x++)
+  for ( ; str[x] != '\0' ; x++)
     ;
-  if(x > 0) x--;
+  if (x > 0) x--;
 
-  for( ; isspace(str[x]) ; x--)
+  for ( ; isspace(str[x]) ; x--)
     str[x] = '\0';
 }

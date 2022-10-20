@@ -25,11 +25,11 @@
 const int FIRMWARE_VERSION_MAJOR = 2;
 const int FIRMWARE_VERSION_MINOR = 6;
 
-#define COMPILE_WIFI //Comment out to remove WiFi functionality
-#define COMPILE_AP //Requires WiFi. Comment out to remove Access Point functionality
-#define COMPILE_ESPNOW //Requires WiFi. Comment out to remove ESP-Now functionality.
-#define COMPILE_BT //Comment out to remove Bluetooth functionality
-#define COMPILE_L_BAND //Comment out to remove L-Band functionality
+//#define COMPILE_WIFI //Comment out to remove WiFi functionality
+//#define COMPILE_AP //Requires WiFi. Comment out to remove Access Point functionality
+//#define COMPILE_ESPNOW //Requires WiFi. Comment out to remove ESP-Now functionality.
+//#define COMPILE_BT //Comment out to remove Bluetooth functionality
+//#define COMPILE_L_BAND //Comment out to remove L-Band functionality
 #define ENABLE_DEVELOPER //Uncomment this line to enable special developer modes (don't check power button at startup)
 
 //Define the RTK board identifier:
@@ -55,33 +55,37 @@ const int FIRMWARE_VERSION_MINOR = 6;
 //Hardware connections
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 //These pins are set in beginBoard()
-int pin_batteryLevelLED_Red;
-int pin_batteryLevelLED_Green;
-int pin_positionAccuracyLED_1cm;
-int pin_positionAccuracyLED_10cm;
-int pin_positionAccuracyLED_100cm;
-int pin_baseStatusLED;
-int pin_bluetoothStatusLED;
-int pin_microSD_CS;
-int pin_zed_tx_ready;
-int pin_zed_reset;
-int pin_batteryLevel_alert;
+byte pin_batteryLevelLED_Red;
+byte pin_batteryLevelLED_Green;
+byte pin_positionAccuracyLED_1cm;
+byte pin_positionAccuracyLED_10cm;
+byte pin_positionAccuracyLED_100cm;
+byte pin_baseStatusLED;
+byte pin_bluetoothStatusLED;
+byte pin_microSD_CS;
+byte pin_zed_tx_ready;
+byte pin_zed_reset;
+byte pin_batteryLevel_alert;
 
-int pin_muxA;
-int pin_muxB;
-int pin_powerSenseAndControl;
-int pin_setupButton;
-int pin_powerFastOff;
-int pin_dac26;
-int pin_adc39;
-int pin_peripheralPowerControl;
+byte pin_PICO;
+byte pin_POCI;
+byte pin_SCK;
 
-int pin_radio_rx;
-int pin_radio_tx;
-int pin_radio_rst;
-int pin_radio_pwr;
-int pin_radio_cts;
-int pin_radio_rts;
+byte pin_muxA;
+byte pin_muxB;
+byte pin_powerSenseAndControl;
+byte pin_setupButton;
+byte pin_powerFastOff;
+byte pin_dac26;
+byte pin_adc39;
+byte pin_peripheralPowerControl;
+
+byte pin_radio_rx;
+byte pin_radio_tx;
+byte pin_radio_rst;
+byte pin_radio_pwr;
+byte pin_radio_cts;
+byte pin_radio_rts;
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
@@ -116,14 +120,25 @@ ESP32Time rtc;
 
 //microSD Interface
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+#define USE_SDFAT
+
+#ifdef USE_SDFAT
+
 #include <SPI.h>
 #include "SdFat.h" //http://librarymanager/All#sdfat_exfat by Bill Greiman. Currently uses v2.1.1
-
 SdFat * sd;
+SdFile * ubxFile; //File that all GNSS ubx messages sentences are written to
+
+#else
+
+#include "SD.h" //Built-in SD library
+SPIClass spi = SPIClass(VSPI);
+File ubxFile;
+
+#endif
 
 char platformFilePrefix[40] = "SFE_Surveyor"; //Sets the prefix for logs and settings files
 
-SdFile * ubxFile; //File that all GNSS ubx messages sentences are written to
 unsigned long lastUBXLogSyncTime = 0; //Used to record to SD every half second
 int startLogTime_minutes = 0; //Mark when we start any logging so we can stop logging after maxLogTime_minutes
 int startCurrentLogTime_minutes = 0; //Mark when we start this specific log file so we can close it after x minutes and start a new one
@@ -172,7 +187,7 @@ volatile uint8_t wifiNmeaConnected;
 //  * Receive NTRIP data timeout
 static uint32_t ntripClientTimer;
 static uint32_t ntripClientStartTime; //For calculating uptime
-static int ntripClientConnectionAttempts; //Count the number of connection attempts between restarts
+//static int ntripClientConnectionAttempts; //Count the number of connection attempts between restarts
 static int ntripClientConnectionAttemptsTotal; //Count the number of connection attempts absolutely
 
 //NTRIP server timer usage:
@@ -181,7 +196,7 @@ static int ntripClientConnectionAttemptsTotal; //Count the number of connection 
 //  * Monitor last RTCM byte received for frame counting
 static uint32_t ntripServerTimer;
 static uint32_t ntripServerStartTime;
-static int ntripServerConnectionAttempts; //Count the number of connection attempts between restarts
+//static int ntripServerConnectionAttempts; //Count the number of connection attempts between restarts
 static int ntripServerConnectionAttemptsTotal; //Count the number of connection attempts absolutely
 
 
@@ -284,7 +299,11 @@ char platformPrefix[55] = "Surveyor"; //Sets the prefix for broadcast names
 
 HardwareSerial serialGNSS(2); //TX on 17, RX on 16
 
-#define SERIAL_SIZE_RX (1024 * 4) //Must be large enough to handle incoming ZED UART traffic. See F9PSerialReadTask().
+//#define SERIAL_SIZE_RX (1024 * 4) //Must be large enough to handle incoming ZED UART traffic. See F9PSerialReadTask().
+
+#define SERIAL_SIZE_RX (1024 * 6) //Should match buffer size in BluetoothSerial.cpp. Reduced from 16384 to make room for WiFi/NTRIP server capabilities
+uint8_t rBuffer[SERIAL_SIZE_RX]; //Buffer for reading from F9P to SPP
+
 TaskHandle_t F9PSerialReadTaskHandle = NULL; //Store handles so that we can kill them if user goes into WiFi NTRIP Server mode
 const uint8_t F9PSerialReadTaskPriority = 1; //3 being the highest, and 0 being the lowest
 
@@ -589,7 +608,14 @@ void setup()
 
   beginIdleTasks(); //Enable processor load calculations
 
-  beginUART2(); //Start UART2 on core 0, used to receive serial from ZED and pass out over SPP
+  settings.dataPortBaud = 115200 * 2;
+
+  serialGNSS.setRxBufferSize(SERIAL_SIZE_RX);
+  serialGNSS.setTimeout(1);
+  serialGNSS.begin(settings.dataPortBaud); //UART2 on pins 16/17 for SPP. The ZED-F9P will be configured to output NMEA over its UART1 at the same rate.
+  //beginUART2(); //Start UART2 on core 0, used to receive serial from ZED and pass out over SPP
+
+  //gpio_pullup_en((gpio_num_t)16); //Force pullup on ESP32 RX / ZED-TX
 
   beginFuelGauge(); //Configure battery fuel guage monitor
 
@@ -610,6 +636,8 @@ void setup()
   log_d("Boot time: %d", millis());
 
   danceLEDs(); //Turn on LEDs like a car dashboard
+
+  setMuxport(MUX_PPS_EVENTTRIGGER); //For to PPS. Set mux to user's choice: NMEA, I2C, PPS, or DAC
 }
 
 void loop()
@@ -640,6 +668,8 @@ void loop()
 
   updateRadio(); //Check if we need to finish sending any RTCM over link radio
 
+  checkForLog();
+
   //Periodically print the position
   if (settings.enablePrintPosition && ((millis() - lastPrintPosition) > 15000))
   {
@@ -664,138 +694,152 @@ void updateLogs()
 
     setLoggingType(); //Determine if we are standard, PPP, or custom. Changes logging icon accordingly.
   }
-  else if (online.logging == true && settings.enableLogging == false)
-  {
-    //Close down file
-    endSD(false, true);
-  }
-  else if (online.logging == true && settings.enableLogging == true && (systemTime_minutes - startCurrentLogTime_minutes) >= settings.maxLogLength_minutes)
-  {
-    if (settings.runLogTest == false)
-      endSD(false, true); //Close down file. A new one will be created at the next calling of updateLogs().
-    else if (settings.runLogTest == true)
-      updateLogTest();
-  }
+  //  else if (online.logging == true && settings.enableLogging == false)
+  //  {
+  //    //Close down file
+  //    endSD(false, true);
+  //  }
+  //  else if (online.logging == true && settings.enableLogging == true && (systemTime_minutes - startCurrentLogTime_minutes) >= settings.maxLogLength_minutes)
+  //  {
+  //    if (settings.runLogTest == false)
+  //      endSD(false, true); //Close down file. A new one will be created at the next calling of updateLogs().
+  //    else if (settings.runLogTest == true)
+  //      updateLogTest();
+  //  }
 
-  if (online.logging == true)
-  {
-    //Force file sync every 5000ms
-    if (millis() - lastUBXLogSyncTime > 5000)
-    {
-      if (xSemaphoreTake(sdCardSemaphore, fatSemaphore_shortWait_ms) == pdPASS)
-      {
-        if (productVariant == RTK_SURVEYOR)
-          digitalWrite(pin_baseStatusLED, !digitalRead(pin_baseStatusLED)); //Blink LED to indicate logging activity
-
-        long startWriteTime = micros();
-        ubxFile->sync();
-        long stopWriteTime = micros();
-        totalWriteTime += stopWriteTime - startWriteTime; //Used to calculate overall write speed
-
-        if (productVariant == RTK_SURVEYOR)
-          digitalWrite(pin_baseStatusLED, !digitalRead(pin_baseStatusLED)); //Return LED to previous state
-
-        updateDataFileAccess(ubxFile); // Update the file access time & date
-
-        lastUBXLogSyncTime = millis();
-        xSemaphoreGive(sdCardSemaphore);
-      } //End sdCardSemaphore
-      else
-      {
-        //This is OK because in the interim more data will be written to the log
-        //and the log file will eventually be synced by the next call in loop
-        log_d("sdCardSemaphore failed to yield, RTK_Surveyor.ino line %d", __LINE__);
-      }
-    }
-
-    //Record any pending trigger events
-    if (newEventToRecord == true)
-    {
-      Serial.println("Recording event");
-
-      //Record trigger count with Time Of Week of rising edge (ms) and Millisecond fraction of Time Of Week of rising edge (ns)
-      char eventData[82]; //Max NMEA sentence length is 82
-      snprintf(eventData, sizeof(eventData), "%d,%d,%d", triggerCount, towMsR, towSubMsR);
-
-      char nmeaMessage[82]; //Max NMEA sentence length is 82
-      createNMEASentence(CUSTOM_NMEA_TYPE_EVENT, nmeaMessage, eventData); //textID, buffer, text
-
-      if (xSemaphoreTake(sdCardSemaphore, fatSemaphore_shortWait_ms) == pdPASS)
-      {
-        ubxFile->println(nmeaMessage);
-
-        xSemaphoreGive(sdCardSemaphore);
-        newEventToRecord = false;
-      }
-      else
-      {
-        //While a retry does occur during the next loop, it is possible to loose
-        //trigger events if they occur too rapidly or if the log file is closed
-        //before the trigger event is written!
-        log_w("sdCardSemaphore failed to yield, RTK_Surveyor.ino line %d", __LINE__);
-      }
-    }
-
-    //Report file sizes to show recording is working
-    if ((millis() - lastFileReport) > 5000)
-    {
-      long fileSize = 0;
-
-      //Attempt to access file system. This avoids collisions with file writing from other functions like recordSystemSettingsToFile() and F9PSerialReadTask()
-      if (xSemaphoreTake(sdCardSemaphore, fatSemaphore_shortWait_ms) == pdPASS)
-      {
-        fileSize = ubxFile->fileSize();
-
-        xSemaphoreGive(sdCardSemaphore);
-      }
-      else
-      {
-        //This is OK because outputting this message is not critical to the RTK
-        //operation and the message will be output by the next call in loop
-        log_d("sdCardSemaphore failed to yield, RTK_Surveyor.ino line %d", __LINE__);
-      }
-
-      if (fileSize > 0)
-      {
-        lastFileReport = millis();
-        if (settings.enablePrintLogFileStatus)
-        {
-          Serial.printf("UBX file size: %ld", fileSize);
-
-          if ((systemTime_minutes - startLogTime_minutes) < settings.maxLogTime_minutes)
-          {
-            //Calculate generation and write speeds every 5 seconds
-            uint32_t fileSizeDelta = fileSize - lastLogSize;
-            Serial.printf(" - Generation rate: %0.1fkB/s", fileSizeDelta / 5.0 / 1000.0);
-
-            if (totalWriteTime > 0)
-              Serial.printf(" - Write speed: %0.1fkB/s", fileSizeDelta / (totalWriteTime / 1000000.0) / 1000.0);
-            else
-              Serial.printf(" - Write speed: 0.0kB/s");
-          }
-          else
-          {
-            Serial.printf(" reached max log time %d", settings.maxLogTime_minutes);
-          }
-
-          Serial.println();
-        }
-
-        totalWriteTime = 0; //Reset write time every 5s
-
-        if (fileSize > lastLogSize)
-        {
-          lastLogSize = fileSize;
-          logIncreasing = true;
-        }
-        else
-        {
-          log_d("No increase in file size");
-          logIncreasing = false;
-        }
-      }
-    }
-  }
+  //  if (online.logging == true)
+  //  {
+  //    //Force file sync every 5000ms
+  //    if (millis() - lastUBXLogSyncTime > 5000)
+  //    {
+  //      if (xSemaphoreTake(sdCardSemaphore, fatSemaphore_shortWait_ms) == pdPASS)
+  //      {
+  //        if (productVariant == RTK_SURVEYOR)
+  //          digitalWrite(pin_baseStatusLED, !digitalRead(pin_baseStatusLED)); //Blink LED to indicate logging activity
+  //
+  //        long startWriteTime = micros();
+  //
+  //#ifdef USE_SDFAT
+  //        ubxFile->sync();
+  //#else
+  //        ubxFile.flush();
+  //#endif
+  //
+  //        long stopWriteTime = micros();
+  //        totalWriteTime += stopWriteTime - startWriteTime; //Used to calculate overall write speed
+  //
+  //        if (productVariant == RTK_SURVEYOR)
+  //          digitalWrite(pin_baseStatusLED, !digitalRead(pin_baseStatusLED)); //Return LED to previous state
+  //
+  //        updateDataFileAccess(ubxFile); // Update the file access time & date
+  //
+  //        lastUBXLogSyncTime = millis();
+  //        xSemaphoreGive(sdCardSemaphore);
+  //      } //End sdCardSemaphore
+  //      else
+  //      {
+  //        //This is OK because in the interim more data will be written to the log
+  //        //and the log file will eventually be synced by the next call in loop
+  //        log_d("sdCardSemaphore failed to yield, RTK_Surveyor.ino line %d", __LINE__);
+  //      }
+  //    }
+  //
+  //    //Record any pending trigger events
+  //    if (newEventToRecord == true)
+  //    {
+  //      Serial.println("Recording event");
+  //
+  //      //Record trigger count with Time Of Week of rising edge (ms) and Millisecond fraction of Time Of Week of rising edge (ns)
+  //      char eventData[82]; //Max NMEA sentence length is 82
+  //      snprintf(eventData, sizeof(eventData), "%d,%d,%d", triggerCount, towMsR, towSubMsR);
+  //
+  //      char nmeaMessage[82]; //Max NMEA sentence length is 82
+  //      createNMEASentence(CUSTOM_NMEA_TYPE_EVENT, nmeaMessage, eventData); //textID, buffer, text
+  //
+  //      if (xSemaphoreTake(sdCardSemaphore, fatSemaphore_shortWait_ms) == pdPASS)
+  //      {
+  //#ifdef USE_SDFAT
+  //        ubxFile->println(nmeaMessage);
+  //#else
+  //        ubxFile.println(nmeaMessage);
+  //#endif
+  //
+  //        xSemaphoreGive(sdCardSemaphore);
+  //        newEventToRecord = false;
+  //      }
+  //      else
+  //      {
+  //        //While a retry does occur during the next loop, it is possible to loose
+  //        //trigger events if they occur too rapidly or if the log file is closed
+  //        //before the trigger event is written!
+  //        log_w("sdCardSemaphore failed to yield, RTK_Surveyor.ino line %d", __LINE__);
+  //      }
+  //    }
+  //
+  //    //Report file sizes to show recording is working
+  //    if ((millis() - lastFileReport) > 5000)
+  //    {
+  //      long fileSize = 0;
+  //
+  //      //Attempt to access file system. This avoids collisions with file writing from other functions like recordSystemSettingsToFile() and F9PSerialReadTask()
+  //      if (xSemaphoreTake(sdCardSemaphore, fatSemaphore_shortWait_ms) == pdPASS)
+  //      {
+  //#ifdef USE_SDFAT
+  //        fileSize = ubxFile->fileSize();
+  //#else
+  //        fileSize = ubxFile.size();
+  //#endif
+  //
+  //        xSemaphoreGive(sdCardSemaphore);
+  //      }
+  //      else
+  //      {
+  //        //This is OK because outputting this message is not critical to the RTK
+  //        //operation and the message will be output by the next call in loop
+  //        log_d("sdCardSemaphore failed to yield, RTK_Surveyor.ino line %d", __LINE__);
+  //      }
+  //
+  //      if (fileSize > 0)
+  //      {
+  //        lastFileReport = millis();
+  //        if (settings.enablePrintLogFileStatus)
+  //        {
+  //          Serial.printf("UBX file size: %ld", fileSize);
+  //
+  //          if ((systemTime_minutes - startLogTime_minutes) < settings.maxLogTime_minutes)
+  //          {
+  //            //Calculate generation and write speeds every 5 seconds
+  //            uint32_t fileSizeDelta = fileSize - lastLogSize;
+  //            Serial.printf(" - Generation rate: %0.1fkB/s", fileSizeDelta / 5.0 / 1000.0);
+  //
+  //            if (totalWriteTime > 0)
+  //              Serial.printf(" - Write speed: %0.1fkB/s", fileSizeDelta / (totalWriteTime / 1000000.0) / 1000.0);
+  //            else
+  //              Serial.printf(" - Write speed: 0.0kB/s");
+  //          }
+  //          else
+  //          {
+  //            Serial.printf(" reached max log time %d", settings.maxLogTime_minutes);
+  //          }
+  //
+  //          Serial.println();
+  //        }
+  //
+  //        totalWriteTime = 0; //Reset write time every 5s
+  //
+  //        if (fileSize > lastLogSize)
+  //        {
+  //          lastLogSize = fileSize;
+  //          logIncreasing = true;
+  //        }
+  //        else
+  //        {
+  //          log_d("No increase in file size");
+  //          logIncreasing = false;
+  //        }
+  //      }
+  //    }
+  //  }
 }
 
 //Once we have a fix, sync system clock to GNSS
@@ -902,4 +946,150 @@ void updateRadio()
     }
   }
 #endif
+}
+
+//static uint8_t rBuffer[1024 * 6]; //Buffer for reading from F9P to SPP
+static uint16_t dataHead = 0; //Head advances as data comes in from GNSS's UART
+//static uint16_t btTail = 0; //BT Tail advances as it is sent over BT
+//static uint16_t nmeaTail = 0; //NMEA TCP client tail
+static uint16_t sdTail = 0; //SD Tail advances as it is recorded to SD
+
+//int btBytesToSend; //Amount of buffered Bluetooth data
+//int nmeaBytesToSend; //Amount of buffered NMEA TCP data
+int sdBytesToRecord; //Amount of buffered microSD card logging data
+int availableBufferSpace; //Distance between head and furthest away tail
+
+int btConnected; //Is the RTK in a state to send Bluetooth data?
+int newBytesToRecord; //Size of data from GNSS
+
+void checkForLog()
+{
+  if (online.logging == true)
+  {
+
+    if (settings.enableTaskReports == true)
+      Serial.printf("SerialReadTask High watermark: %d\r\n",  uxTaskGetStackHighWaterMark(NULL));
+
+    //Determine BT connection state
+    btConnected = (bluetoothGetState() == BT_CONNECTED)
+                  && (systemState != STATE_BASE_TEMP_SETTLE)
+                  && (systemState != STATE_BASE_TEMP_SURVEY_STARTED);
+
+    availableBufferSpace = sizeof(rBuffer);
+
+    //Determine the amount of microSD card logging data in the buffer
+    sdBytesToRecord = 0;
+    if (online.logging)
+    {
+      sdBytesToRecord = dataHead - sdTail;
+      if (sdBytesToRecord < 0)
+        sdBytesToRecord += sizeof(rBuffer);
+    }
+
+    availableBufferSpace = sizeof(rBuffer) - sdBytesToRecord;
+
+    //Don't fill the last byte to prevent buffer overflow
+    if (availableBufferSpace)
+      availableBufferSpace -= 1;
+
+    //While there is free buffer space and UART2 has at least one RX byte
+    while (availableBufferSpace && serialGNSS.available())
+    {
+      //Fill the buffer to the end and then start at the beginning
+      if ((dataHead + availableBufferSpace) >= sizeof(rBuffer))
+        availableBufferSpace = sizeof(rBuffer) - dataHead;
+
+      //Add new data into circular buffer in front of the head
+      //availableBufferSpace is already reduced to avoid buffer overflow
+      newBytesToRecord = serialGNSS.readBytes(&rBuffer[dataHead], availableBufferSpace);
+
+      //Account for the bytes read
+      if (newBytesToRecord <= 0)
+        break;
+
+      //Set the next fill offset
+      dataHead += newBytesToRecord;
+      if (dataHead >= sizeof(rBuffer))
+        dataHead -= sizeof(rBuffer);
+
+      //Account for the new data
+//      if (btConnected)
+//        btBytesToSend += newBytesToRecord;
+      if (online.logging)
+        sdBytesToRecord += newBytesToRecord;
+//      if ((online.nmeaServer || online.nmeaClient) && wifiNmeaConnected)
+//        nmeaBytesToSend += newBytesToRecord;
+    } //End Serial.available()
+
+    //----------------------------------------------------------------------
+    //Log data to the SD card
+    //----------------------------------------------------------------------
+
+    //If user wants to log, record to SD
+    if (!online.logging)
+      //Discard the data
+      sdTail = dataHead;
+    else if (sdBytesToRecord > 0)
+    {
+      //Check if we are inside the max time window for logging
+      if ((systemTime_minutes - startLogTime_minutes) < settings.maxLogTime_minutes)
+      {
+        //Attempt to gain access to the SD card, avoids collisions with file
+        //writing from other functions like recordSystemSettingsToFile()
+        if (xSemaphoreTake(sdCardSemaphore, loggingSemaphoreWait_ms) == pdPASS)
+        {
+          //Reduce bytes to send if we have more to send then the end of the buffer
+          //We'll wrap next loop
+          if ((sdTail + sdBytesToRecord) > sizeof(rBuffer))
+            sdBytesToRecord = sizeof(rBuffer) - sdTail;
+
+          //Write the data to the file
+#ifdef USE_SDFAT
+          sdBytesToRecord = ubxFile->write(&rBuffer[sdTail], sdBytesToRecord);
+#else
+          //TODO
+          sdBytesToRecord = ubxFile.write(&rBuffer[sdTail], sdBytesToRecord);
+#endif
+          //log_d("SD %d bytes recorded", sdBytesToRecord);
+
+          //Force file sync every 5000ms
+          if (millis() - lastUBXLogSyncTime > 5000)
+          {
+#ifdef USE_SDFAT
+            ubxFile->sync();
+#else
+            ubxFile.flush();
+#endif
+            //log_d("SD sync");
+
+            lastUBXLogSyncTime = millis();
+          } //End sdCardSemaphore
+
+          xSemaphoreGive(sdCardSemaphore);
+
+          //Account for the sent data or dropped
+          sdTail += sdBytesToRecord;
+          if (sdTail >= sizeof(rBuffer))
+            sdTail -= sizeof(rBuffer);
+        } //End sdCardSemaphore
+        else
+        {
+          //Retry the semaphore a little later if possible
+          if (sdBytesToRecord >= (sizeof(rBuffer) - 1))
+          {
+            //Error - no more room in the buffer, drop a buffer's worth of data
+            sdTail = dataHead;
+            log_e("ERROR - sdCardSemaphore failed to yield, Tasks.ino line %d", __LINE__);
+            Serial.printf("ERROR - Dropped %d bytes: GNSS --> log file\r\n", sdBytesToRecord);
+          }
+
+          //Only complain when over half the buffer needs to be written
+          //to the microSD card
+          else if (sdBytesToRecord > (sizeof(rBuffer) / 2))
+            log_w("sdCardSemaphore failed to yield, Tasks.ino line %d", __LINE__);
+        }
+      } //End maxLogTime
+    } //End logging
+  }
+
 }

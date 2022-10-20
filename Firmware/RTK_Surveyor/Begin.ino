@@ -50,6 +50,9 @@ void beginBoard()
     pin_zed_tx_ready = 26;
     pin_zed_reset = 27;
     pin_batteryLevel_alert = 36;
+    pin_PICO = 23;
+    pin_POCI = 19;
+    pin_SCK = 18;
 
     //Bug in ZED-F9P v1.13 firmware causes RTK LED to not light when RTK Floating with SBAS on.
     //The following changes the POR default but will be overwritten by settings in NVM or settings file
@@ -68,6 +71,9 @@ void beginBoard()
     pin_dac26 = 26;
     pin_powerFastOff = 27;
     pin_adc39 = 39;
+    pin_PICO = 23;
+    pin_POCI = 19;
+    pin_SCK = 18;
 
     pinMode(pin_powerSenseAndControl, INPUT_PULLUP);
     pinMode(pin_powerFastOff, INPUT);
@@ -103,6 +109,9 @@ void beginBoard()
     pin_dac26 = 26;
     pin_powerFastOff = 27;
     pin_adc39 = 39;
+    pin_PICO = 23;
+    pin_POCI = 19;
+    pin_SCK = 18;
 
     pin_radio_rx = 33;
     pin_radio_tx = 32;
@@ -170,7 +179,7 @@ void beginBoard()
       Serial.printf("resetCount: %d\r\n", settings.resetCount);
       recordSystemSettingsToFileLFS(settingsFileName); //Avoid overwriting LittleFS settings onto SD
     }
-    
+
     Serial.print("Reset reason: ");
     switch (esp_reset_reason())
     {
@@ -212,6 +221,7 @@ void beginSD()
     digitalWrite(pin_microSD_CS, HIGH); //Be sure SD is deselected
 
     //Allocate the data structure that manages the microSD card
+#ifdef USE_SDFAT
     if (!sd)
     {
       sd = new SdFat();
@@ -221,6 +231,7 @@ void beginSD()
         break;
       }
     }
+#endif
 
     //Do a quick test to see if a card is present
     int tries = 0;
@@ -246,7 +257,13 @@ void beginSD()
       settings.spiFrequency = 16;
     }
 
+#ifdef USE_SDFAT
     if (sd->begin(SdSpiConfig(pin_microSD_CS, SHARED_SPI, SD_SCK_MHZ(settings.spiFrequency))) == false)
+#else
+    //    spi.begin(pin_SCK, pin_POCI, pin_PICO, pin_microSD_CS);
+    //    if (SD.begin(pin_microSD_CS, spi, settings.spiFrequency) == false)
+    if (SD.begin(pin_microSD_CS) == false)
+#endif
     {
       tries = 0;
       maxTries = 1;
@@ -255,7 +272,12 @@ void beginSD()
         log_d("SD init failed. Trying again %d out of %d", tries + 1, maxTries);
 
         delay(250); //Give SD more time to power up, then try again
+#ifdef USE_SDFAT
         if (sd->begin(SdSpiConfig(pin_microSD_CS, SHARED_SPI, SD_SCK_MHZ(settings.spiFrequency))) == true) break;
+#else
+        //        if (SD.begin(pin_microSD_CS, spi, settings.spiFrequency) == true) break;
+        if (SD.begin(pin_microSD_CS) == true) break;
+#endif
       }
 
       if (tries == maxTries)
@@ -267,11 +289,13 @@ void beginSD()
     }
 
     //Change to root directory. All new file creation will be in root.
+#ifdef USE_SDFAT
     if (sd->chdir() == false)
     {
       Serial.println("SD change directory failed");
       break;
     }
+#endif
 
     if (createTestFile() == false)
     {
@@ -301,17 +325,21 @@ void endSD(bool alreadyHaveSemaphore, bool releaseSemaphore)
   //Done with the SD card
   if (online.microSD)
   {
+#ifdef USE_SDFAT
     sd->end();
+#endif
     online.microSD = false;
     Serial.println("microSD: Offline");
   }
 
   //Free the caches for the microSD card
+#ifdef USE_SDFAT
   if (sd)
   {
     delete sd;
     sd = NULL;
   }
+#endif
 
   //Release the semaphore
   if (releaseSemaphore)
@@ -352,24 +380,24 @@ void pinUART2Task( void *pvParameters )
 //Serial Read/Write tasks for the F9P must be started after BT is up and running otherwise SerialBT->available will cause reboot
 void startUART2Tasks()
 {
-  //Start the tasks for handling incoming and outgoing BT bytes to/from ZED-F9P
-  if (F9PSerialReadTaskHandle == NULL)
-    xTaskCreate(
-      F9PSerialReadTask,
-      "F9Read", //Just for humans
-      readTaskStackSize, //Stack Size
-      NULL, //Task input parameter
-      F9PSerialReadTaskPriority, //Priority
-      &F9PSerialReadTaskHandle); //Task handle
-
-  if (F9PSerialWriteTaskHandle == NULL)
-    xTaskCreate(
-      F9PSerialWriteTask,
-      "F9Write", //Just for humans
-      writeTaskStackSize, //Stack Size
-      NULL, //Task input parameter
-      F9PSerialWriteTaskPriority, //Priority
-      &F9PSerialWriteTaskHandle); //Task handle
+//  //Start the tasks for handling incoming and outgoing BT bytes to/from ZED-F9P
+//  if (F9PSerialReadTaskHandle == NULL)
+//    xTaskCreate(
+//      F9PSerialReadTask,
+//      "F9Read", //Just for humans
+//      readTaskStackSize, //Stack Size
+//      NULL, //Task input parameter
+//      F9PSerialReadTaskPriority, //Priority
+//      &F9PSerialReadTaskHandle); //Task handle
+//
+//  if (F9PSerialWriteTaskHandle == NULL)
+//    xTaskCreate(
+//      F9PSerialWriteTask,
+//      "F9Write", //Just for humans
+//      writeTaskStackSize, //Stack Size
+//      NULL, //Task input parameter
+//      F9PSerialWriteTaskPriority, //Priority
+//      &F9PSerialWriteTaskHandle); //Task handle
 }
 
 //Stop tasks - useful when running firmware update or WiFi AP is running

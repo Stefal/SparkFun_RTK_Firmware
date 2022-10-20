@@ -213,8 +213,12 @@ void menuUserProfiles()
         //Remove profile from SD if available
         if (online.microSD == true)
         {
+#ifdef USE_SDFAT
           if (sd->exists(settingsFileName))
             sd->remove(settingsFileName);
+#else
+          //TODO
+#endif
         }
 
         recordProfileNumber(0); //Move to Profile1
@@ -298,11 +302,15 @@ void factoryReset()
     if (xSemaphoreTake(sdCardSemaphore, fatSemaphore_longWait_ms) == pdPASS)
     {
       //Remove this specific settings file. Don't remove the other profiles.
+#ifdef USE_SDFAT
       sd->remove(settingsFileName);
 
       sd->remove(stationCoordinateECEFFileName); //Remove station files
       sd->remove(stationCoordinateGeodeticFileName);
-      
+#else
+      //TODO
+#endif
+
       xSemaphoreGive(sdCardSemaphore);
     } //End sdCardSemaphore
     else

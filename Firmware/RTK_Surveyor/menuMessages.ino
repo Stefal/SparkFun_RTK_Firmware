@@ -379,7 +379,7 @@ void beginLogging(const char *customFileName)
 
         if (strlen(fileName) == 0)
         {
-          sprintf(fileName, "%s_%02d%02d%02d_%02d%02d%02d.ubx", //SdFat library
+          sprintf(fileName, "/%s_%02d%02d%02d_%02d%02d%02d.ubx", //SdFat library
                   platformFilePrefix,
                   rtc.getYear() - 2000, rtc.getMonth() + 1, rtc.getDay(), //ESP32Time returns month:0-11
                   rtc.getHour(true), rtc.getMinute(), rtc.getSecond() //ESP32Time getHour(true) returns hour:0-23
@@ -391,6 +391,7 @@ void beginLogging(const char *customFileName)
         strcpy(fileName, customFileName);
       }
 
+#ifdef USE_SDFAT
       //Allocate the ubxFile
       if (!ubxFile)
       {
@@ -402,14 +403,23 @@ void beginLogging(const char *customFileName)
           return;
         }
       }
+#else
+      //TODO
+#endif
 
       //Attempt to write to file system. This avoids collisions with file writing in F9PSerialReadTask()
       if (xSemaphoreTake(sdCardSemaphore, fatSemaphore_longWait_ms) == pdPASS)
       {
+#ifdef USE_SDFAT
         // O_CREAT - create the file if it does not exist
         // O_APPEND - seek to the end of the file prior to each write
         // O_WRITE - open for write
         if (ubxFile->open(fileName, O_CREAT | O_APPEND | O_WRITE) == false)
+#else
+        //TODO
+        ubxFile = SD.open(fileName, FILE_APPEND);
+        if (!ubxFile)
+#endif
         {
           Serial.printf("Failed to create GNSS UBX data file: %s\r\n", fileName);
           online.logging = false;
@@ -445,7 +455,7 @@ void beginLogging(const char *customFileName)
 
         char nmeaMessage[82]; //Max NMEA sentence length is 82
         createNMEASentence(CUSTOM_NMEA_TYPE_RESET_REASON, nmeaMessage, rstReason); //textID, buffer, text
-        ubxFile->println(nmeaMessage);
+        writeUBXFile(nmeaMessage);
 
         //Record system firmware versions and info to log
 
@@ -453,17 +463,29 @@ void beginLogging(const char *customFileName)
         char firmwareVersion[30]; //v1.3 December 31 2021
         sprintf(firmwareVersion, "v%d.%d-%s", FIRMWARE_VERSION_MAJOR, FIRMWARE_VERSION_MINOR, __DATE__);
         createNMEASentence(CUSTOM_NMEA_TYPE_SYSTEM_VERSION, nmeaMessage, firmwareVersion); //textID, buffer, text
+#ifdef USE_SDFAT
         ubxFile->println(nmeaMessage);
+#else
+        //TODO
+#endif
 
         //ZED-F9P firmware: HPG 1.30
         createNMEASentence(CUSTOM_NMEA_TYPE_ZED_VERSION, nmeaMessage, zedFirmwareVersion); //textID, buffer, text
+#ifdef USE_SDFAT
         ubxFile->println(nmeaMessage);
+#else
+        //TODO
+#endif
 
         //Device BT MAC. See issue: https://github.com/sparkfun/SparkFun_RTK_Firmware/issues/346
         char macAddress[5];
         sprintf(macAddress, "%02X%02X", btMACAddress[4], btMACAddress[5]);
         createNMEASentence(CUSTOM_NMEA_TYPE_DEVICE_BT_ID, nmeaMessage, macAddress); //textID, buffer, text
+#ifdef USE_SDFAT
         ubxFile->println(nmeaMessage);
+#else
+        //TODO
+#endif
 
         if (reuseLastLog == true)
         {
@@ -499,16 +521,25 @@ void endLogging(bool gotSemaphore, bool releaseSemaphore)
       if (sdPresent())
       {
         //Close down file system
+#ifdef USE_SDFAT
         ubxFile->sync();
         ubxFile->close();
+#else
+        //TODO
+        ubxFile.close();
+#endif
         Serial.println("Log file closed");
       }
       else
         Serial.println("Log file - SD card not present, failed to close file");
 
       //Done with the log file
+#ifdef USE_SDFAT
       delete ubxFile;
       ubxFile = NULL;
+#else
+      //TODO
+#endif
       online.logging = false;
 
       //Release the semaphore if requested
@@ -525,21 +556,37 @@ void endLogging(bool gotSemaphore, bool releaseSemaphore)
 }
 
 //Update the file access and write time with date and time obtained from GNSS
+#ifdef USE_SDFAT
 void updateDataFileAccess(SdFile *dataFile)
+#else
+void updateDataFileAccess(File dataFile)
+#endif
 {
   if (online.rtc == true)
   {
     //ESP32Time returns month:0-11
+#ifdef USE_SDFAT
     dataFile->timestamp(T_ACCESS, rtc.getYear(), rtc.getMonth() + 1, rtc.getDay(), rtc.getHour(true), rtc.getMinute(), rtc.getSecond());
     dataFile->timestamp(T_WRITE, rtc.getYear(), rtc.getMonth() + 1, rtc.getDay(), rtc.getHour(true), rtc.getMinute(), rtc.getSecond());
+#else
+    //TODO
+#endif
   }
 }
 
 //Update the file create time with date and time obtained from GNSS
+#ifdef USE_SDFAT
 void updateDataFileCreate(SdFile *dataFile)
+#else
+void updateDataFileCreate(File dataFile)
+#endif
 {
+#ifdef USE_SDFAT
   if (online.rtc == true)
     dataFile->timestamp(T_CREATE, rtc.getYear(), rtc.getMonth() + 1, rtc.getDay(), rtc.getHour(true), rtc.getMinute(), rtc.getSecond()); //ESP32Time returns month:0-11
+#else
+  //TODO
+#endif
 }
 
 //Finds last log
@@ -555,19 +602,46 @@ bool findLastLog(char *lastLogName)
     if (xSemaphoreTake(sdCardSemaphore, 5000 / portTICK_PERIOD_MS) == pdPASS)
     {
       //Count available binaries
+#ifdef USE_SDFAT
       SdFile tempFile;
       SdFile dir;
+#else
+      //TODO
+      File tempFile;
+      File dir;
+#endif
       const char* LOG_EXTENSION = "ubx";
       const char* LOG_PREFIX = platformFilePrefix;
       char fname[50]; //Handle long file names
 
+#ifdef USE_SDFAT
       dir.open("/"); //Open root
+#else
+      //TODO
+#endif
 
+#ifdef USE_SDFAT
       while (tempFile.openNext(&dir, O_READ))
+#else
+      //TODO
+      while (0)
+#endif
       {
+
+#ifdef USE_SDFAT
         if (tempFile.isFile())
+#else
+        //TODO
+        if (1)
+#endif
         {
+
+#ifdef USE_SDFAT
           tempFile.getName(fname, sizeof(fname));
+#else
+          //TODO
+          strcpy(fname, "TODO");
+#endif
 
           //Check for matching file name prefix and extension
           if (strcmp(LOG_EXTENSION, &fname[strlen(fname) - strlen(LOG_EXTENSION)]) == 0)
@@ -745,7 +819,7 @@ void updateLogTest()
       //During the first test, create the log file
       reuseLastLog = false;
       char fileName[100];
-      sprintf(fileName, "%s_LogTest_%02d%02d%02d_%02d%02d%02d.ubx", //SdFat library
+      sprintf(fileName, "/%s_LogTest_%02d%02d%02d_%02d%02d%02d.ubx",
               platformFilePrefix,
               rtc.getYear() - 2000, rtc.getMonth() + 1, rtc.getDay(), //ESP32Time returns month:0-11
               rtc.getHour(true), rtc.getMinute(), rtc.getSecond() //ESP32Time getHour(true) returns hour:0-23
@@ -849,7 +923,7 @@ void updateLogTest()
 
     if (xSemaphoreTake(sdCardSemaphore, fatSemaphore_longWait_ms) == pdPASS)
     {
-      ubxFile->println(nmeaMessage);
+      writeUBXFile(nmeaMessage);
       xSemaphoreGive(sdCardSemaphore);
     }
     else
@@ -859,4 +933,16 @@ void updateLogTest()
 
     Serial.printf("%s\r\n", logMessage);
   }
+}
+
+//Helper function to select between sdFat and SD
+void writeUBXFile(char * dataToWrite)
+{
+#ifdef USE_SDFAT
+  ubxFile->println(dataToWrite);
+#else
+  //TODO
+  ubxFile.println(dataToWrite);
+#endif
+
 }

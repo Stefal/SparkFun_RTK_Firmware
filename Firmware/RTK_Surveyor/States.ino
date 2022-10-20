@@ -430,7 +430,12 @@ void updateSystemState()
             {
               char nmeaMessage[82]; //Max NMEA sentence length is 82
               createNMEASentence(CUSTOM_NMEA_TYPE_WAYPOINT, nmeaMessage, (char*)"CustomEvent"); //textID, buffer, text
+#ifdef USE_SDFAT
               ubxFile->println(nmeaMessage);
+#else
+              ubxFile.println(nmeaMessage);
+#endif
+
               logged = true;
             }
 
@@ -461,27 +466,50 @@ void updateSystemState()
               if (online.microSD == true)
               {
                 //Open the marks file
+#ifdef USE_SDFAT
                 SdFile * marksFile = new SdFile();
+#else
+                //TODO
+                File * marksFile = new File();
+#endif
+
+#ifdef USE_SDFAT
                 if (marksFile && marksFile->open(fileName, O_APPEND | O_WRITE))
+#else
+                //TODO
+                if (0)
+#endif
                 {
                   fileOpen = true;
+#ifdef USE_SDFAT
                   marksFile->timestamp(T_CREATE, rtc.getYear(), rtc.getMonth() + 1, rtc.getDay(),
                                        rtc.getHour(true), rtc.getMinute(), rtc.getSecond());
+#else
+                  //TODO
+#endif
                 }
+#ifdef USE_SDFAT
                 else if (marksFile && marksFile->open(fileName, O_CREAT | O_WRITE))
+#else
+                //TODO
+                else if (0)
+#endif
                 {
                   fileOpen = true;
+#ifdef USE_SDFAT
                   marksFile->timestamp(T_ACCESS, rtc.getYear(), rtc.getMonth() + 1, rtc.getDay(),
                                        rtc.getHour(true), rtc.getMinute(), rtc.getSecond());
                   marksFile->timestamp(T_WRITE, rtc.getYear(), rtc.getMonth() + 1, rtc.getDay(),
                                        rtc.getHour(true), rtc.getMinute(), rtc.getSecond());
-
+#else
+                  //TODO
+#endif
                   //Add the column headers
                   //YYYYMMDDHHMMSS, Lat: xxxx, Long: xxxx, Alt: xxxx, SIV: xx, HPA: xxxx, Batt: xxx
                   //                           1         2         3         4         5         6         7         8         9
                   //                  1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901
                   strcpy(markBuffer, "Date, Time, Latitude, Longitude, Altitude Meters, SIV, HPA Meters, Battery Level, Voltage\n");
-                  marksFile->write(markBuffer, strlen(markBuffer));
+                  marksFile->write((uint8_t*)markBuffer, strlen(markBuffer));
                 }
                 if (fileOpen)
                 {
@@ -511,11 +539,14 @@ void updateSystemState()
                              battLevel, battVoltage);
 
                   //Write the mark to the file
-                  marksFile->write(markBuffer, strlen(markBuffer));
+                  marksFile->write((uint8_t*)markBuffer, strlen(markBuffer));
 
                   // Update the file to create time & date
+#ifdef USE_SDFAT
                   updateDataFileCreate(marksFile);
-
+#else
+//TODO
+#endif
                   //Close the mark file
                   marksFile->close();
                   marked = true;

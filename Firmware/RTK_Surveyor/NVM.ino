@@ -85,6 +85,7 @@ void recordSystemSettingsToFileSD(char *fileName)
     if (xSemaphoreTake(sdCardSemaphore, fatSemaphore_longWait_ms) == pdPASS)
     {
       gotSemaphore = true;
+#ifdef USE_SDFAT
       if (sd->exists(fileName))
       {
         log_d("Removing from SD: %s", fileName);
@@ -97,12 +98,32 @@ void recordSystemSettingsToFileSD(char *fileName)
         Serial.println("Failed to create settings file");
         break;
       }
+#else
+      if (SD.exists(fileName))
+      {
+        log_d("Removing from SD: %s", fileName);
+        SD.remove(fileName);
+      }
 
+      //TODO
+      File settingsFile = SD.open(fileName, FILE_WRITE);
+      if (!settingsFile)
+      {
+        Serial.println("Failed to create settings file");
+        break;
+      }
+#endif
+
+#ifdef USE_SDFAT
       updateDataFileCreate(&settingsFile); // Update the file to create time & date
 
       recordSystemSettingsToFile((File *)&settingsFile); //Record all the settings via strings to file
 
       updateDataFileAccess(&settingsFile); // Update the file access time & date
+#else
+      //TODO
+      recordSystemSettingsToFile((File *)&settingsFile); //Record all the settings via strings to file
+#endif
 
       settingsFile.close();
 
@@ -323,14 +344,24 @@ bool loadSystemSettingsFromFileSD(char* fileName, Settings *settings)
     if (xSemaphoreTake(sdCardSemaphore, fatSemaphore_longWait_ms) == pdPASS)
     {
       gotSemaphore = true;
+#ifdef USE_SDFAT
       if (sd->exists(fileName))
+#else
+      //TODO
+      if (SD.exists(fileName))
+#endif
       {
+#ifdef USE_SDFAT
         SdFile settingsFile; //FAT32
         if (settingsFile.open(fileName, O_READ) == false)
         {
           Serial.println("Failed to open settings file");
           break;
         }
+#else
+        //TODO
+        File settingsFile;
+#endif
 
         char line[60];
         int lineNumber = 0;
@@ -338,8 +369,12 @@ bool loadSystemSettingsFromFileSD(char* fileName, Settings *settings)
         while (settingsFile.available())
         {
           //Get the next line from the file
-          //int n = getLine(&settingsFile, line, sizeof(line)); //Use with SD library
+#ifdef USE_SDFAT
           int n = settingsFile.fgets(line, sizeof(line)); //Use with SdFat library
+#else
+          //TODO
+          int n = getLine(&settingsFile, line, sizeof(line)); //Use with SD library
+#endif
           if (n <= 0) {
             Serial.printf("Failed to read line %d from settings file\r\n", lineNumber);
           }

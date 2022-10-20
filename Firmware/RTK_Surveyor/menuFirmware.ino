@@ -84,22 +84,50 @@ void mountSDThenUpdate(const char * firmwareFileName)
 void scanForFirmware()
 {
   //Count available binaries
+#ifdef USE_SDFAT
   SdFile tempFile;
   SdFile dir;
+#else
+  //TODO
+  File tempFile;
+  File dir;
+#endif
   const char* BIN_EXT = "bin";
   const char* BIN_HEADER = "RTK_Surveyor_Firmware";
 
   char fname[50]; //Handle long file names
 
+#ifdef USE_SDFAT
   dir.open("/"); //Open root
+#else
+  //TODO
+#endif
 
   binCount = 0; //Reset count in case scanForFirmware is called again
 
+#ifdef USE_SDFAT
   while (tempFile.openNext(&dir, O_READ) && binCount < maxBinFiles)
+#else
+  //TODO
+  while (0)
+#endif
   {
+
+
+#ifdef USE_SDFAT
     if (tempFile.isFile())
+#else
+    //TODO
+    if (1)
+#endif
     {
+
+#ifdef USE_SDFAT
       tempFile.getName(fname, sizeof(fname));
+#else
+      //TODO
+      strcpy(fname, "todo");
+#endif
 
       if (strcmp(forceFirmwareFileName, fname) == 0)
       {
@@ -154,12 +182,29 @@ void updateFromSD(const char *firmwareFileName)
   stopUART2Tasks();
 
   Serial.printf("Loading %s\r\n", firmwareFileName);
+#ifdef USE_SDFAT
   if (sd->exists(firmwareFileName))
+#else
+  //TODO
+  if (SD.exists(firmwareFileName))
+#endif
   {
+#ifdef USE_SDFAT
     SdFile firmwareFile;
     firmwareFile.open(firmwareFileName, O_READ);
+#else
+    //TODO
+    File firmwareFile;
+    //firmwareFile.open(firmwareFileName, FILE_READ);
+#endif
 
+#ifdef USE_SDFAT
     size_t updateSize = firmwareFile.fileSize();
+#else
+    //TODO
+    size_t updateSize = 0;
+#endif
+
     if (updateSize == 0)
     {
       Serial.println("Error: Binary is empty");
@@ -240,7 +285,12 @@ void updateFromSD(const char *firmwareFileName)
 
           //Remove forced firmware file to prevent endless loading
           firmwareFile.close();
+#ifdef USE_SDFAT
           sd->remove(firmwareFileName);
+#else
+          //TODO
+          SD.remove(firmwareFileName);
+#endif
 
           i2cGNSS.factoryReset(); //Reset everything: baud rate, I2C address, update rate, everything.
         }

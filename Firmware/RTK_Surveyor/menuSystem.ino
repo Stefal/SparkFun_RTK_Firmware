@@ -353,7 +353,11 @@ void menuSystem()
         if (xSemaphoreTake(sdCardSemaphore, fatSemaphore_longWait_ms) == pdPASS)
         {
           Serial.println("Files found (date time size name):\r\n");
+#ifdef USE_SDFAT
           sd->ls(LS_R | LS_DATE | LS_SIZE);
+#else
+          //TODO
+#endif
         }
         else
         {

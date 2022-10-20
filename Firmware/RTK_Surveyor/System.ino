@@ -417,17 +417,28 @@ bool isConnected(uint8_t deviceAddress)
 //Create a test file in file structure to make sure we can
 bool createTestFile()
 {
-  SdFile testFile;
-  char testFileName[40] = "testfile.txt";
+  char testFileName[40] = "/testfile.txt";
 
   //Attempt to write to the file system
+#ifdef USE_SDFAT
+  SdFile testFile;
   if (testFile.open(testFileName, O_CREAT | O_APPEND | O_WRITE) != true)
+#else
+  File testFile = SD.open(testFileName, FILE_WRITE);
+  if (!testFile)
+#endif
     return (false);
 
   //File successfully created
   testFile.close();
+#ifdef USE_SDFAT
   if (sd->exists(testFileName))
     sd->remove(testFileName);
+#else
+  if (SD.exists(testFileName))
+    SD.remove(testFileName);
+#endif
+
   return (true);
 }
 
